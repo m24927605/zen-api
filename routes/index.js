@@ -1,48 +1,68 @@
 const express = require('express');
 const router = express.Router();
-const bip39=require('bip39');
+const bip39 = require('bip39');
 const zencashjs = require('zencashjs');
-const {mnemonic}=require('../config/wallet.json');
-const {getUnspent,getPayFee,checkAmountBigthanFee} =require('../services/zencash');
+const { priKey, mnemonic, address } = require('../config/wallet');
+const { getUnspent, getLatestBlockHash, getBlockHeight, determinePayFee, checkAmountBigthanFee } = require('../services/zencash');
 /* GET home page. */
-router.get('/', (req, res, next)=> {
+router.get('/', (req, res, next) => {
   res.render('index', { title: 'Express' });
 });
 
-router.get('/mnemonic', (req, res, next)=> {
-  const mnemonic = bip39.generateMnemonic();
-  res.json({"mnemonic":mnemonic});
+router.get('/getunspent', async (req, res, next) => {
+  const unspent = await getUnspent('znnA2VibNgeJfq41B44dWjXiGnv7GdAV2Lb')
+  res.json({ "unspent": unspent });
 });
 
-router.get('/normal-address', (req, res, next) =>{
-  const priKey=zencashjs.address.mkPrivKey(mnemonic);
+router.get('/determinePayFee', async (req, res, next) => {
+  const determinePayFee = await determinePayFee(6)
+  res.json({ "determinePayFee": determinePayFee });
+});
+
+router.get('/mnemonic', (req, res, next) => {
+  const mnemonic = bip39.generateMnemonic();
+  res.json({ "mnemonic": mnemonic });
+});
+
+router.get('/blockhash', async (req, res, next) => {
+  const blockhash = await getLatestBlockHash()
+  res.json({ "blockhash": blockhash });
+});
+
+router.get('/blockheight', async (req, res, next) => {
+  const blockheight = await getBlockHeight('00000000032fc3dafb65b493df5e2a117d5685d50d9d00d23203b416ce94f006')
+  res.json({ "blockheight": blockheight });
+});
+
+router.get('/normal-address', (req, res, next) => {
+  const priKey = zencashjs.address.mkPrivKey(mnemonic);
   const pubKey = zencashjs.address.privKeyToPubKey(priKey, true);
   const address = zencashjs.address.pubKeyToAddr(pubKey)
-  res.json({"address":address});
+  res.json({ "address": address });
 });
 
-router.get('/private-address', (req, res, next) =>{
-  const priKey=zencashjs.zaddress.mkZSecretKey(mnemonic);
+router.get('/private-address', (req, res, next) => {
+  const priKey = zencashjs.zaddress.mkZSecretKey(mnemonic);
   const spendingKey = zencashjs.zaddress.zSecretKeyToSpendingKey(priKey);
   const payingKey = zencashjs.zaddress.zSecretKeyToPayingKey(priKey);
   const transmissionKey = zencashjs.zaddress.zSecretKeyToTransmissionKey(priKey);
-  const private_address = zencashjs.zaddress.mkZAddress(payingKey,transmissionKey);
-  res.json({"private_address":private_address});
+  const private_address = zencashjs.zaddress.mkZAddress(payingKey, transmissionKey);
+  res.json({ "private_address": private_address });
 });
 
-router.get('/private-address', (req, res, next) =>{
-  const priKey=zencashjs.zaddress.mkZSecretKey(mnemonic);
+router.get('/private-address', (req, res, next) => {
+  const priKey = zencashjs.zaddress.mkZSecretKey(mnemonic);
   const spendingKey = zencashjs.zaddress.zSecretKeyToSpendingKey(priKey);
   const payingKey = zencashjs.zaddress.zSecretKeyToPayingKey(priKey);
   const transmissionKey = zencashjs.zaddress.zSecretKeyToTransmissionKey(priKey);
-  const private_address = zencashjs.zaddress.mkZAddress(payingKey,transmissionKey);
-  res.json({"private_address":private_address});
+  const private_address = zencashjs.zaddress.mkZAddress(payingKey, transmissionKey);
+  res.json({ "private_address": private_address });
 });
 
-router.get('/test', async(req, res, next) =>{
+router.get('/test', async (req, res, next) => {
   //const result=await getUnspent('znnA2VibNgeJfq41B44dWjXiGnv7GdAV2Lb')
   //const result=await getPayFee();
-  let tmp=[
+  let tmp = [
     {
       "address": "znm27wSjzh6tqXKTXiCk2VCcEhSFT6nAd7i",
       "txid": "f7594235d06b5f00ff904a531a5ccd0d81dcbd835f6b9fecae93c09b5e0ec51f",
@@ -134,10 +154,10 @@ router.get('/test', async(req, res, next) =>{
       "confirmations": 129
     }
   ]
-  const payFee=await getPayFee();
-  const result=await checkAmountBigthanFee(tmp,payFee);
+  const payFee = await determinePayFee(6);
+  const result = await checkAmountBigthanFee(tmp, payFee);
   zencashjs.transaction.createRawTx
-  res.json({"checkAmountBigthanFee":result});
+  res.json({ "checkAmountBigthanFee": result });
 });
 
 module.exports = router;
