@@ -23,7 +23,7 @@ const APIRequest = (url) => {
 
       let resultArray = await Promise.all([zensystemResult, zensolutionsResult]);
       resultArray.forEach((item) => {
-        if (item.statusCode === 200) {
+        if (item.statusCode === 200 && item.headers['content-type'].includes('application/json')) {
           resolve(item.body);
         }
         else {
@@ -57,6 +57,25 @@ exports.getUnspent = (address) => {
     }
   });
 }
+
+/** 取得所有Unspent的satoshis 加總
+ *  @param {array} unspentArray
+ */
+exports.getUnspentTotalAmount = (unspentArray) => {
+  return new Promise( (resolve, reject) => {
+    try {
+      let sum=0;
+      unspentArray.forEach((item)=>{
+        sum+=item.satoshis;
+      })
+      resolve(sum);
+    } catch (e) {
+      console.error(`[getUnspentTotalAmount] 失敗`);
+      reject(e);
+    }
+  });
+}
+
 /** 決定要付給礦工的fee
  *  @param {number} blocks
  */
@@ -65,7 +84,7 @@ exports.determinePayFee = (blocks) => {
     try {
       const url = `utils/estimatefee?nbBlocks=${blocks}`;
       const result = await APIRequest(url);
-      resolve(result[blocks] * 10);
+      resolve(result[blocks] * 10*100000000);
     } catch (e) {
       console.error(`[determinePayFee] 失敗`);
       reject(e);
@@ -149,6 +168,26 @@ exports.signTX = (unspentArray, nowBlockHash, nowBlockHeight, sendAmountSatoshis
       resolve(signed_serialized);
     } catch (e) {
       console.error(`[signTX] 失敗`);
+      reject(e);
+    }
+  })
+}
+
+exports.pushTX=(rawTX)=>{
+  return new Promise(async(resolve,reject)=>{
+    try {
+      const postOptions = {
+        method: 'POST',
+        uri: 'https://explorer.zensystem.io/api/tx/send',
+        body: {
+          rawtx: rawTX
+        },
+        json: true
+      };
+      let result= await rp(postOptions);
+      resolve(result);
+    } catch (e) {
+      console.error(`[pushTX] 失敗`);
       reject(e);
     }
   })
