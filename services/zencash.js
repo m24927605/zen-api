@@ -58,6 +58,27 @@ exports.getUnspent = (address) => {
   });
 }
 
+/** 取得Unspent並整理成打交易的unspent
+ *  @param {string} address
+ */
+exports.getUnspentForTX = (address) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      console.log(`${address}查詢 unspent`)
+      const url = `addr/${address}/utxo`;
+      const result = await APIRequest(url);
+      let tmpArray=[];
+      for(let item of result){
+        tmpArray.push({txid:item.txid,vout:item.vout,scriptPubKey:item.scriptPubKey})
+      }
+      resolve(tmpArray);
+    } catch (e) {
+      console.error(`地址：${address} [getUnspent] 失敗`);
+      reject(e);
+    }
+  });
+}
+
 /** 取得所有Unspent的satoshis 加總
  *  @param {array} unspentArray
  */
@@ -91,6 +112,22 @@ exports.determinePayFee = (blocks) => {
     }
   });
 }
+/** 取得BlockHash
+ *  @param {number} blocks
+ */
+exports.getBlockHash = (blocks) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const url = `block-index/${blocks}`;
+      const result = await APIRequest(url);
+      resolve(result['blockHash']);
+    } catch (e) {
+      console.error(`[getLatestBlockHash] 失敗`);
+      reject(e);
+    }
+  });
+}
+
 /** 取得最新的BlockHash
  *  
  */
@@ -106,7 +143,8 @@ exports.getLatestBlockHash = () => {
     }
   });
 }
-/** 取得最新的BlockHeight
+
+/** 取得最新的BlockHeight-300
  *  @param {string} blockHash
  */
 exports.getBlockHeight = (blockHash) => {
@@ -121,6 +159,7 @@ exports.getBlockHeight = (blockHash) => {
     }
   });
 }
+
 /** 確認所要支付的Amount大於fee
  *  @param {array} unspentArray 
  *  @param {number} payFee
@@ -131,7 +170,7 @@ exports.checkAmountBigthanFee = (unspentArray, payFee) => {
       let isBig = false;
       let sum = 0;
       for (let unspentItem of unspentArray) {
-        sum = math.eval(`${sum} + ${unspentItem.amount}`);
+        sum = math.eval(`${sum} + ${unspentItem.satoshis}`);
       }
       let toAmount = math.eval(`${sum} - ${payFee}`);
       (toAmount > 0) ? isBig = true : isBig = false;
@@ -187,8 +226,10 @@ exports.pushTX=(rawTX)=>{
       let result= await rp(postOptions);
       resolve(result);
     } catch (e) {
-      console.error(`[pushTX] 失敗`);
+      console.error(`[pushTX] 失敗 ${e}`);
       reject(e);
     }
   })
 }
+
+
