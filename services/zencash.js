@@ -44,6 +44,24 @@ const APIRequest = (url) => {
 /** 取得Unspent
  *  @param {string} address
  */
+exports.getTXHistory = (address) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      console.log(`${address}查詢 unspent`)
+      const url = `txs?address=${address}`;
+      const result = await APIRequest(url);
+      const txs = result['txs'];
+      resolve(txs);
+    } catch (e) {
+      console.error(`地址：${address} [getTXHistory] 失敗`);
+      reject(e);
+    }
+  });
+}
+
+/** 取得Unspent
+ *  @param {string} address
+ */
 exports.getUnspent = (address) => {
   return new Promise(async (resolve, reject) => {
     try {
@@ -60,20 +78,46 @@ exports.getUnspent = (address) => {
 
 /** 取得Unspent並整理成打交易的unspent
  *  @param {string} address
+ * @param {number} targetSatoshis
  */
-exports.getUnspentForTX = (address) => {
+exports.getUnspentForTX = (address, targetSatoshis) => {
   return new Promise(async (resolve, reject) => {
     try {
       console.log(`${address}查詢 unspent`)
       const url = `addr/${address}/utxo`;
-      const result = await APIRequest(url);
-      let tmpArray=[];
-      for(let item of result){
-        tmpArray.push({txid:item.txid,vout:item.vout,scriptPubKey:item.scriptPubKey})
-      }
-      resolve(tmpArray);
+      const utxoList = await APIRequest(url);
+      // Appends cumulative value of each item in utxoList
+      const historyWithCum = utxoList
+        .filter(x => x.confirmations !== 0)
+        // Only retrieve relevant attributes from utxoList
+        .map(({
+          txid, vout, scriptPubKey, satoshis,
+        }) => ({
+          txid,
+          vout,
+          scriptPubKey,
+          satoshis,
+        }))
+        .reduce((acc, curr, idx) => {
+          if (!acc.length) {
+            return [{ ...curr, cumSatoshis: curr.satoshis }];
+          }
+          const prevItem = acc[idx - 1];
+          const cumSatoshis = prevItem.cumSatoshis + curr.satoshis;
+          return [...acc, { ...curr, cumSatoshis }];
+        }, []);
+      const prunedHistoryWithCum = historyWithCum.reduce((acc, curr, idx) => {
+        // base case for first iteration
+        if (!acc.length) {
+          return [curr];
+        }
+        const prevItem = historyWithCum[idx - 1];
+        const sufficient = prevItem.cumSatoshis >= targetSatoshis;
+        return sufficient ? acc : [...acc, curr];
+      }, []);
+      resolve(prunedHistoryWithCum);
     } catch (e) {
-      console.error(`地址：${address} [getUnspent] 失敗`);
+      console.error(`地址：${address} [getUnspent] 失敗 ${e}`);
       reject(e);
     }
   });
@@ -83,11 +127,11 @@ exports.getUnspentForTX = (address) => {
  *  @param {array} unspentArray
  */
 exports.getUnspentTotalAmount = (unspentArray) => {
-  return new Promise( (resolve, reject) => {
+  return new Promise((resolve, reject) => {
     try {
-      let sum=0;
-      unspentArray.forEach((item)=>{
-        sum+=item.satoshis;
+      let sum = 0;
+      unspentArray.forEach((item) => {
+        sum += item.satoshis;
       })
       resolve(sum);
     } catch (e) {
@@ -105,7 +149,7 @@ exports.determinePayFee = (blocks) => {
     try {
       const url = `utils/estimatefee?nbBlocks=${blocks}`;
       const result = await APIRequest(url);
-      resolve(result[blocks] * 10*100000000);
+      resolve(result[blocks] * 10 * 100000000);
     } catch (e) {
       console.error(`[determinePayFee] 失敗`);
       reject(e);
@@ -212,8 +256,8 @@ exports.signTX = (unspentArray, nowBlockHash, nowBlockHeight, sendAmountSatoshis
   })
 }
 
-exports.pushTX=(rawTX)=>{
-  return new Promise(async(resolve,reject)=>{
+exports.pushTX = (rawTX) => {
+  return new Promise(async (resolve, reject) => {
     try {
       const postOptions = {
         method: 'POST',
@@ -223,7 +267,7 @@ exports.pushTX=(rawTX)=>{
         },
         json: true
       };
-      let result= await rp(postOptions);
+      let result = await rp(postOptions);
       resolve(result);
     } catch (e) {
       console.error(`[pushTX] 失敗 ${e}`);
